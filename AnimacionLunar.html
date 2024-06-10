@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Simulación Tierra y Luna en A-Frame</title>
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <style>
+    .controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .controls button {
+      margin: 5px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    .table-container {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid white;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <a-scene>
+    <!-- Fondo de la escena con estrellas -->
+    <a-sky src="fondo.jpg"></a-sky>
+    <a-entity id="stars" geometry="primitive: sphere; radius: 5000" material="color: black; shader: flat">
+      <a-animation attribute="rotation" dur="30000" fill="forwards" to="0 360 0" repeat="indefinite"></a-animation>
+    </a-entity>
+
+    <!-- Cámara con animación -->
+    <a-entity camera position="0 2 10" look-controls>
+      <a-animation attribute="position" dur="20000" to="0 2 0" repeat="indefinite" direction="alternate"></a-animation>
+    </a-entity>
+
+    <!-- Tierra con textura y rotación -->
+    <a-sphere id="earth" radius="1" position="0 1.6 0" src="tierra.png">
+      <a-animation attribute="rotation" dur="30000" fill="forwards" to="0 360 0" repeat="indefinite"></a-animation>
+      <a-animation attribute="material.color" from="blue" to="green" dur="5000" direction="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+
+    <!-- Luna con textura y rotación -->
+    <a-sphere id="moon" radius="0.27" position="48 1.6 0" src="luna.jpg">
+      <a-animation attribute="rotation" dur="30000" fill="forwards" to="0 360 0" repeat="indefinite"></a-animation>
+      <a-animation attribute="material.color" from="gray" to="white" dur="5000" direction="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+
+    <!-- Línea entre Tierra y Luna con color dinámico -->
+    <a-entity id="line" line="start: 0 1.6 0; end: 48 1.6 0; color: red">
+      <a-animation attribute="line.color" from="red" to="blue" dur="2000" direction="alternate" repeat="indefinite"></a-animation>
+    </a-entity>
+
+    <!-- Satélite 3D con órbita -->
+    <a-box id="satellite" position="0 2.5 0" depth="0.1" height="0.1" width="0.1" color="red">
+      <a-animation attribute="position" dur="10000" to="48 1.6 0" repeat="indefinite" direction="alternate"></a-animation>
+    </a-box>
+
+    <!-- Partículas de estrellas -->
+    <a-entity particle-system="preset: snow; particleCount: 2000; color: #FFFFFF"></a-entity>
+  </a-scene>
+
+  <!-- Botones de simulación -->
+  <div class="controls">
+    <button onclick="simulateYears(1000)">+1000 años</button>
+    <button onclick="simulateYears(10000)">+10000 años</button>
+    <button onclick="simulateYears(20000)">+20000 años</button>
+    <br>
+    <button onclick="simulateYears(-1000)">-1000 años</button>
+    <button onclick="simulateYears(-10000)">-10000 años</button>
+    <button onclick="simulateYears(-20000)">-20000 años</button>
+    <br>
+    <button onclick="resetSimulation()">Reset</button>
+  </div>
+
+  <!-- Tabla de información -->
+  <div class="table-container">
+    <table>
+      <tr>
+        <th>Año simulado</th>
+        <td id="currentYear">2024</td>
+      </tr>
+      <tr>
+        <th>Tiempo simulado</th>
+        <td id="timeCounter">0</td>
+      </tr>
+      <tr>
+        <th>Distancia aumentada</th>
+        <td id="distanceIncreased">0</td>
+      </tr>
+      <tr>
+        <th>Distancia en km</th>
+        <td id="distanceKm">384,400</td>
+      </tr>
+      <tr>
+        <th>Distancia en millas</th>
+        <td id="distanceMiles">238,855</td>
+      </tr>
+      <tr>
+        <th>Distancia en años luz</th>
+        <td id="distanceLightYears">0.00004</td>
+      </tr>
+      <tr>
+        <th>Velocidad de alejamiento</th>
+        <td id="distanceRate">0.038</td>
+      </tr>
+      <tr>
+        <th>Años retrocedidos</th>
+        <td id="yearsBackward">0</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Alerta para retroceso en el tiempo -->
+  <div class="alert" id="timeAlert" style="display:none;">
+    ¡Has retrocedido en el tiempo!
+  </div>
+
+  <script>
+    // Año inicial
+    let currentYear = 2024;
+    // Años simulados inicialmente
+    let currentYears = 0;
+    // Distancia aumentada inicialmente
+    let distanceIncreased = 0;
+    // Años retrocedidos inicialmente
+    let yearsBackward = 0;
+
+    // Distancia inicial en unidades A-Frame (48 unidades = 384,400 km)
+    const initialDistance = 48;
+    // Distancia de alejamiento de la Luna por año (en km)
+    const distancePerYear = 0.038; // La Luna se aleja aproximadamente 3.8 cm por año
+    // A cada unidad en A-Frame le corresponden 8000 km
+    const scale = 8000;
+    // Conversión de km a millas
+    const kmToMiles = 0.621371;
+    // Conversión de km a años luz
+    const kmToLightYears = 9.461e+12;
+
+    // Referencias a los elementos
+    const moon = document.querySelector('#moon');
+    const line = document.querySelector('#line');
+    const currentYearElement = document.querySelector('#currentYear');
+    const timeCounterElement = document.querySelector('#timeCounter');
+    const distanceIncreasedElement = document.querySelector('#distanceIncreased');
+    const distanceKmElement = document.querySelector('#distanceKm');
+    const distanceMilesElement = document.querySelector('#distanceMiles');
+    const distanceLightYearsElement = document.querySelector('#distanceLightYears');
+    const distanceRateElement = document.querySelector('#distanceRate');
+    const yearsBackwardElement = document.querySelector('#yearsBackward');
+    const timeAlert = document.querySelector('#timeAlert');
+
+    // Sonido para cambios en la simulación
+    const audio = new Audio('change-sound.mp3');
+
+    // Función para actualizar la simulación
+    function updateSimulation() {
+      // Calcula la nueva distancia
+      const additionalDistance = (distancePerYear * currentYears) / scale;
+      const newDistance = initialDistance + additionalDistance;
+
+      // Calcula la distancia aumentada
+      const increased = additionalDistance * scale;
+
+      // Actualiza la posición de la Luna (órbita elíptica)
+      const a = newDistance; // Semi-major axis
+      const b = newDistance * 0.8; // Semi-minor axis
+      const angle = (currentYears % 360) * (Math.PI / 180);
+      const x = a * Math.cos(angle);
+      const z = b * Math.sin(angle);
+      moon.setAttribute('position', `${x} 1.6 ${z}`);
+
+      // Actualiza la línea
+      line.setAttribute('line', `start: 0 1.6 0; end: ${x} 1.6 ${z}; color: red`);
+
+      // Calcula y actualiza los datos
+      const totalDistanceKm = (newDistance * scale).toLocaleString();
+      const totalDistanceMiles = (newDistance * scale * kmToMiles).toLocaleString();
+      const distanceLightYears = newDistance * scale / kmToLightYears;
+
+      // Actualiza los elementos de la tabla
+      distanceKmElement.textContent = totalDistanceKm;
+      distanceMilesElement.textContent = totalDistanceMiles;
+      distanceLightYearsElement.textContent = distanceLightYears.toFixed(10);
+      timeCounterElement.textContent = currentYears;
+      distanceIncreasedElement.textContent = increased.toFixed(2);
+      currentYearElement.textContent = currentYear;
+      yearsBackwardElement.textContent = yearsBackward;
+      distanceRateElement.textContent = distancePerYear;
+    }
+
+    // Función para simular los años
+    function simulateYears(years) {
+      // Si estamos retrocediendo en el tiempo
+      if (years < 0) {
+        // Muestra la alerta de tiempo
+        timeAlert.style.display = 'block';
+        setTimeout(() => {
+          timeAlert.style.display = 'none';
+        }, 3000);
+
+        // Actualiza el año simulado
+        currentYear += years;
+        // Incrementa el contador de años retrocedidos
+        yearsBackward -= years;
+      }
+      // Si estamos avanzando en el tiempo
+      else {
+        // Incrementa el año simulado
+        currentYear += years;
+      }
+
+      // Actualiza los años simulados
+      currentYears += years;
+
+      // Reproduce el sonido
+      audio.play();
+
+      // Actualiza la simulación
+      updateSimulation();
+    }
+
+    // Función para reiniciar la simulación
+    function resetSimulation() {
+      currentYear = 2024;
+      currentYears = 0;
+      distanceIncreased = 0;
+      yearsBackward = 0;
+      updateSimulation();
+    }
+
+    // Inicializa la simulación
+    updateSimulation();
+  </script>
+</body>
+</html>
